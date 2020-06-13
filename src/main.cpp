@@ -30,6 +30,7 @@ void send_can_message(string message) {
 
 void recv_func() {
     CANMessage message;
+    device.printf("[CAN2] Starting thread to receive CAN messages...\n\r");
     while (1) {
         rx_led = 1;
         while (can2.read(message, 0)) {
@@ -43,6 +44,7 @@ void read_from_serial() {
     string buffer = "";
     list<string> messages;
     char c;
+    device.printf("[CAN1] Starting thread to listening for input...\n\r");
     while (1) {
         while (1) {
             c = device.getc();
@@ -63,6 +65,10 @@ void read_from_serial() {
         while (!messages.empty()) {
             send_can_message(messages.front());
             messages.pop_front();
+        }
+        while (device.readable()) {
+            c = device.getc();
+            device.printf("%c\n\r", c);
         }
     }
 
