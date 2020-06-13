@@ -1,18 +1,76 @@
-#include "mbed.h"
+#include <mbed.h>
+#include <rtos.h>
+#include <mbed_events.h>
+#include <string>
+#include <list>
 
 Serial device(USBTX, USBRX);
-DigitalOut led(LED1);
+
+CAN can1(PD_0, PD_1);
+CAN can2(PB_5, PB_6);
+
+DigitalIn button(USER_BUTTON);
+DigitalOut rx_led(LED2);
+DigitalOut tx_led(LED3);
+
+rtos::Thread send_thread;
+rtos::Thread recv_thread;
+
+void send_can_message(string message) {
+    CANMessage msg(1, message.c_str(), message.length() + 1);
+    tx_led = 1;
+    if (can1.write(msg)) {
+        device.printf("[CAN1] Sent CAN message '%s'\n\r", message.c_str());
+    } else {
+        device.printf("[CAN1] Failed to send CAN message '%s'\n\r", message.c_str());
+    }
+    tx_led = 0;
+    
+}
+
+void recv_func() {
+    CANMessage message;
+    while (1) {
+        rx_led = 1;
+        while (can2.read(message, 0)) {
+            device.printf("[CAN2] '%s'\n\r", message.data);
+        }
+        rx_led = 0;
+    }
+}
+
+void read_from_serial() {
+    string buffer = "";
+    list<string> messages;
+    char c;
+    while (1) {
+        while (1) {
+            c = device.getc();
+            device.printf("%c", c);
+            if (c == '\r') {
+                messages.push_back(buffer);
+                break;
+            } else {
+                buffer += c;
+            }
+
+            if (buffer.length() == 7) {
+                messages.push_back(buffer);
+                buffer = "";
+            }
+        }
+        device.printf("\n\r");
+        while (!messages.empty()) {
+            send_can_message(messages.front());
+            messages.pop_front();
+        }
+    }
+
+}
 
 int main() {
     device.baud(38400);
-    device.printf("Hello world!\n");
-    //uint16_t* msg_buf = new uint16_t[128];
-    char c;
-    while (1) {
-        //device.read(msg_buf, 128);
-        led = 0;
-        c = device.getc();
-        device.putc(c + 1);
-        led = 1;
-    }
+    send_thread.start(read_from_serial);
+    recv_thread.start(recv_func);
 }
+
